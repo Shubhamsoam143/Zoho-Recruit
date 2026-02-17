@@ -1,0 +1,131 @@
+client_id = "";
+client_secret = "";
+refresh_token = "";
+jobadder_api = "https://api.jobadder.com/v2";
+token_headers = Map();
+token_headers.put("Content-Type","application/x-www-form-urlencoded");
+token_params = Map();
+token_params.put("grant_type","refresh_token");
+token_params.put("client_id",client_id);
+token_params.put("client_secret",client_secret);
+token_params.put("refresh_token",refresh_token);
+token_resp = invokeurl
+[
+	url :"https://id.jobadder.com/connect/token"
+	type :POST
+	parameters:token_params
+	headers:token_headers
+];
+access_token = token_resp.get("access_token");
+info access_token;
+// Fetch Candidates Attachments
+// pageList = List();
+// dummy = "12345678901234567890123456789012345678901234567890";
+// for each  c in dummy.toList("")
+// {
+// 	pageList.add(pageList.size() + 1);
+// }
+moreRecords = true;
+counter = 0;
+// pageList = List({1});
+// for each  page in pageList
+// {
+params = Map();
+params.put("fields","JobAdder_ID,id");
+params.put("page",1);
+params.put("per_page",15);
+params.put("criteria","Is_Attachment_Present:equals:false");
+// params.put("cvid",846338000000850005);
+resp = invokeurl
+[
+	url :"https://recruit.zoho.com/recruit/v2/Candidates/search"
+	type :GET
+	parameters:params
+	connection:"recruit_conn"
+];
+dataList = resp.get("data");
+// info dataList;
+for each  rec in dataList
+{
+	rec_id = rec.get("id");
+	counter = counter + 1;
+	candidateId = rec.get("JobAdder_ID");
+	if(candidateId == null || candidateId == "")
+	{
+		continue;
+	}
+	candidateId = candidateId.toNumber();
+	// 		JOBAdder API 
+	headers = Map();
+	headers.put("Authorization","Bearer " + access_token);
+	listResp = invokeurl
+	[
+		url :jobadder_api + "/candidates/" + candidateId + "/attachments"
+		type :GET
+		headers:headers
+	];
+	info listResp;
+	attList = listResp.get("items");
+	if(attList != null && attList.size() > 0)
+	{
+		for each  att in attList
+		{
+			attachmentId = att.get("attachmentId");
+			category = att.get("category");
+			url = att.get("links").get("self");
+			fileResp = invokeurl
+			[
+				url :jobadder_api + "/candidates/" + candidateId + "/attachments/" + attachmentId
+				type :GET
+				headers:headers
+			];
+			info isFile(fileResp);
+			if(isFile(fileResp) == true)
+			{
+				file = fileResp;
+			}
+			else
+			{
+				file = fileResp.toFile(att.get("fileName"));
+			}
+			zohoCategory = "Resume";
+			// default
+			if(category == "Resume")
+			{
+				zohoCategory = "Resume";
+			}
+			else if(category == "Cover Letter")
+			{
+				zohoCategory = "Cover Letter";
+			}
+			else if(category == "Offer Letter")
+			{
+				zohoCategory = "Offer";
+			}
+			else
+			{
+				zohoCategory = "Others";
+			}
+			// upload into Zoho recruit candidate
+			file.setParamName("file");
+			uploadResp = invokeurl
+			[
+				url :"https://recruit.zoho.com/recruit/v2/Candidates/" + rec_id + "/Attachments?attachments_category=" + zohoCategory
+				type :POST
+				files:file
+				connection:"recruit_conn"
+			];
+			info uploadResp;
+		}
+	}
+}
+// 	infoMap = resp.get("info");
+// 	moreRecords = infoMap.get("more_records");
+// 	if(!moreRecords)
+// 	{
+// 		info "Breaking loop";
+// 		break;
+// 	}
+// }
+info "Record Counter---> " + counter;
+return counter;
