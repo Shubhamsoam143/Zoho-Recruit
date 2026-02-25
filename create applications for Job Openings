@@ -1,6 +1,6 @@
-client_id = "w3elxzdlexvudljgu7boaosyn4";
-client_secret = "zylpilonlq5ejetpabzapdcqz446pf4cwfbooexc4ar4huunhqhy";
-refresh_token = "8a72d8b5042e39f932fbd36c359b5438";
+client_id = "";
+client_secret = "";
+refresh_token = "";
 jobadder_api = "https://api.jobadder.com/v2";
 token_headers = Map();
 token_headers.put("Content-Type","application/x-www-form-urlencoded");
