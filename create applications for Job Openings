@@ -1,0 +1,203 @@
+client_id = "w3elxzdlexvudljgu7boaosyn4";
+client_secret = "zylpilonlq5ejetpabzapdcqz446pf4cwfbooexc4ar4huunhqhy";
+refresh_token = "8a72d8b5042e39f932fbd36c359b5438";
+jobadder_api = "https://api.jobadder.com/v2";
+token_headers = Map();
+token_headers.put("Content-Type","application/x-www-form-urlencoded");
+token_params = Map();
+token_params.put("grant_type","refresh_token");
+token_params.put("client_id",client_id);
+token_params.put("client_secret",client_secret);
+token_params.put("refresh_token",refresh_token);
+token_resp = invokeurl
+[
+	url :"https://id.jobadder.com/connect/token"
+	type :POST
+	parameters:token_params
+	headers:token_headers
+];
+access_token = token_resp.get("access_token");
+// info access_token;
+// Fetch candidate applications
+// pageList = List({1});
+// for each  page in pageList
+// {
+params = Map();
+params.put("fields","JobAdder_ID,id");
+params.put("criteria","(Inactive:equals:true)");
+params.put("page",1);
+params.put("per_page",1);
+// params.put("cvid",846338000001063100);
+resp_op = invokeurl
+[
+	url :"https://recruit.zoho.com/recruit/v2/Job_Openings/search"
+	type :GET
+	parameters:params
+	connection:"recruit_conn"
+];
+// info "resp_op-----> " + resp_op;
+dataList = resp_op.get("data");
+recordList = List();
+for each  rec in dataList
+{
+	rec_id = rec.get("id");
+	// 	rec_id = 846338000003311434;
+	info "rec_id-----> " + rec_id;
+	jobId = rec.get("JobAdder_ID");
+	if(jobId == null || jobId == "")
+	{
+		continue;
+	}
+	jobId = jobId.toNumber();
+	// 	jobId = 1316244;
+	headers = Map();
+	headers.put("Authorization","Bearer " + access_token);
+	params = Map();
+	params.put("limit","200");
+	params.put("offset","0");
+	applications_resp = invokeurl
+	[
+		url :jobadder_api + "/jobs/" + jobId + "/applications"
+		type :GET
+		parameters:params
+		headers:headers
+	];
+	// 		info applications_resp;
+	items = applications_resp.get("items");
+	if(items != null && items.size() > 0)
+	{
+		candidateList = List();
+		candidateList2 = List();
+		candidate_AdderID = List();
+		candidate_AdderID2 = List();
+		counter = 0;
+		for each  item in items
+		{
+			candidateId = "";
+			candidateMap = item.get("candidate");
+			if(candidateMap != null)
+			{
+				candidateId = candidateMap.get("candidateId");
+				// 				info "Candidate ID : " + candidateId;
+				counter = counter + 1;
+				if(counter <= 100)
+				{
+					candidate_AdderID.add(candidateId);
+				}
+				else if(counter <= 200)
+				{
+					candidate_AdderID2.add(candidateId);
+				}
+				else
+				{
+					info "More than 100 candidates";
+				}
+			}
+		}
+		info "Total Candidates----> " + counter;
+		info "JobAdder Candidates ID----> " + candidate_AdderID;
+		info "JobAdder Candidates ID2----> " + candidate_AdderID2;
+		criteria = "(JobAdder_ID:in:" + candidate_AdderID + ")";
+		resp1 = invokeurl
+		[
+			url :"https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=" + criteria
+			type :GET
+			connection:"recruit_conn"
+		];
+		// 				info "Criteria1 Response--->"+ resp1;
+		if(resp1 != null && resp1.get("data") != null)
+		{
+			data = resp1.get("data");
+			for each  rec in data
+			{
+				candidate_rec_id = rec.get("id");
+				candidateList.add(candidate_rec_id);
+			}
+		}
+		info "candidateList-----------> " + candidateList;
+		jobList = List();
+		jobList.add(rec_id);
+		if(candidateList != null && !isEmpty(candidateList))
+		{
+			dataMap = Map();
+			dataMap.put("jobids",jobList);
+			dataMap.put("ids",candidateList);
+			dataParsed = Map();
+			dataParsed.put("data",dataMap.toJSONList());
+			associated_rec1 = invokeurl
+			[
+				url :"https://recruit.zoho.com/recruit/v2/Candidates/actions/associate"
+				type :PUT
+				parameters:dataParsed.toString()
+				connection:"recruit_conn"
+			];
+			info "associated_rec1-----> " + associated_rec1;
+		}
+		criteria2 = "(JobAdder_ID:in:" + candidate_AdderID2 + ")";
+		resp2 = invokeurl
+		[
+			url :"https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=" + criteria2
+			type :GET
+			connection:"recruit_conn"
+		];
+		// 				info "Criteria2 Response--->"+ resp2;
+		if(resp2 != null && resp2.get("data") != null)
+		{
+			data = resp2.get("data");
+			for each  rec in data
+			{
+				candidate_rec_id = rec.get("id");
+				candidateList2.add(candidate_rec_id);
+			}
+		}
+		info "candidateList2-----------> " + candidateList2;
+		if(candidateList2 != null && !isEmpty(candidateList2))
+		{
+			dataMap2 = Map();
+			dataMap2.put("jobids",jobList);
+			dataMap2.put("ids",candidateList2);
+			dataParsed2 = Map();
+			dataParsed2.put("data",dataMap2.toJSONList());
+			associated_rec2 = invokeurl
+			[
+				url :"https://recruit.zoho.com/recruit/v2/Candidates/actions/associate"
+				type :PUT
+				parameters:dataParsed2.toString()
+				connection:"recruit_conn"
+			];
+			info "associated_rec2-----> " + associated_rec2;
+		}
+	}
+	else
+	{
+		info "No applications found for this Job Opening: " + jobId;
+	}
+	update_map = Map();
+	update_map.put("Inactive",false);
+	update_map.put("id",rec_id);
+	recordList.add(update_map);
+	// 	Testing purpose don't remove the commented code-----Shubham
+	// 		updateData = Map();
+	// 		updateData.put("data",toJSONList(update_map));
+	// 		update_rec = invokeurl
+	// 		[
+	// 			url :"https://recruit.zoho.com/recruit/v2/Candidates"
+	// 			type :PUT
+	// 			parameters:updateData + ""
+	// 			connection:"recruit_conn"
+	// 		];
+	// 		info "update_rec----> " + update_rec;
+	// 	test code end
+}
+dataListMap = Map();
+dataListMap.put("data",recordList);
+info dataListMap;
+update_rec = invokeurl
+[
+	url :"https://recruit.zoho.com/recruit/v2/Job_Openings"
+	type :PUT
+	parameters:dataListMap + ""
+	connection:"recruit_conn"
+];
+info "update_rec----> " + update_rec;
+return "";
