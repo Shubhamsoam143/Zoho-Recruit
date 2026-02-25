@@ -1,0 +1,93 @@
+client_id = "";
+client_secret = "";
+refresh_token = "";
+jobadder_api = "https://api.jobadder.com/v2";
+token_headers = Map();
+token_headers.put("Content-Type","application/x-www-form-urlencoded");
+token_params = Map();
+token_params.put("grant_type","refresh_token");
+token_params.put("client_id",client_id);
+token_params.put("client_secret",client_secret);
+token_params.put("refresh_token",refresh_token);
+token_resp = invokeurl
+[
+	url :"https://id.jobadder.com/connect/token"
+	type :POST
+	parameters:token_params
+	headers:token_headers
+];
+access_token = token_resp.get("access_token");
+info access_token;
+// Fetch Job Openings
+pageList = List();
+dummy = "12345678901234567890123456789012345678901234567890";
+for each  c in dummy.toList("")
+{
+	pageList.add(pageList.size() + 1);
+}
+moreRecords = true;
+counter = 0;
+// // a = List({1,2,3,4,5,6,7});
+for each  page in pageList
+{
+	if(!moreRecords)
+	{
+		info "Record Counter---> " + counter;
+		info "Breaking loop";
+		break;
+	}
+	params = Map();
+// 	params.put("fields","Job_Opening_ID,Job_ID");
+	params.put("page",page);
+	params.put("per_page",100);
+	params.put("criteria","(Inactive:equals:true)");
+	resp = invokeurl
+	[
+		url :"https://recruit.zoho.com/recruit/v2/Job_Openings/search"
+		type :GET
+		parameters:params
+		connection:"recruit_conn"
+	];
+	dataList = resp.get("data");
+		info dataList;
+	jobOpeningIdList = List();
+	for each  rec in dataList
+	{
+		job_id = rec.get("JobAdder_ID").toNumber();
+		counter = counter + 1;
+		//JOBS API 
+		headers = Map();
+		headers.put("Authorization","Bearer " + access_token);
+		params = Map();
+		params.put("Embed","applications,notes");
+		job_resp = invokeurl
+		[
+			url :jobadder_api + "/jobs/" + job_id
+			type :GET
+			parameters:params
+			headers:headers
+		];
+			info "JobAdder Response-----> "+job_resp;
+		jobOpeningIdMap = Map();
+		jobOpeningIdMap.put("id",rec.get("id"));
+		jobOpeningIdMap.put("Job_Description",job_resp.get("jobDescription"));
+		jobOpeningIdMap.put("Inactive",false);
+		jobOpeningIdList.add(jobOpeningIdMap);
+	}
+	infoMap = resp.get("info");
+	moreRecords = infoMap.get("more_records");
+	// 	info jobOpeningIdList;
+	dataMap = Map();
+	dataMap.put("data",jobOpeningIdList);
+	updateResp = invokeurl
+	[
+		url :"https://recruit.zoho.com/recruit/v2/Job_Openings"
+		type :PUT
+		parameters:dataMap.toString()
+		connection:"recruit_conn"
+		content-type:"application/json"
+	];
+	info updateResp;
+}
+	info counter;
+return "";
